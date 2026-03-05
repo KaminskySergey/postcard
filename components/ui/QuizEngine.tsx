@@ -1,10 +1,12 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Swords, Trophy } from 'lucide-react'
 import QuizStep from './QuizStep'
-import ReorderStep from './RearderStep'
+import ReorderStep from './ReorderStep'
 import { IQuestion } from '@/types/question'
 import { useRouter } from 'next/navigation'
+import { cn } from '@/utils/utils'
+import ProgressBar from './ProgressBar'
 
 interface IQuizEngine {
     questions: IQuestion[],
@@ -13,52 +15,41 @@ interface IQuizEngine {
 }
 
 export default function QuizEngine({ questions, targetName, creatorName }: IQuizEngine) {
-    const router = useRouter()
-
-    const [step, setStep] = useState(-1) 
+    const [step, setStep] = useState(-1)
     const [currentIdx, setCurrentIdx] = useState(0)
     const [score, setScore] = useState(0)
+    const [answered, setAnswered] = useState(false)
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
-    const [selectedOption, setSelectedOption] = useState<string | null>(null)
-    const [userWords, setUserWords] = useState<string[]>([])
-    const [shuffledWords, setShuffledWords] = useState<string[]>([])
 
+    const router = useRouter()
     const currentQuestion = questions[currentIdx]
 
-    useEffect(() => {
-        if (step === 0 && currentQuestion.type === 'reorder') {
-            setUserWords([])
-            setShuffledWords([...currentQuestion.content.words].sort(() => Math.random() - 0.5))
-        }
-    }, [currentIdx, step, currentQuestion])
-
     const handleAnswer = (correct: boolean) => {
+        if (answered) return
+        setAnswered(true)
         setIsCorrect(correct)
         if (correct) setScore(prev => prev + 1)
     }
 
     const handleNext = () => {
+        setAnswered(false)
         setIsCorrect(null)
-        setSelectedOption(null)
-        setUserWords([])
-        setShuffledWords([])
-
-        if (currentIdx + 1 < questions.length) {
+        if (currentIdx < questions.length - 1) {
             setCurrentIdx(prev => prev + 1)
         } else {
-            setStep(1)
+            setStep(1) 
         }
     }
 
     if (step === -1) {
         return (
-            <div className="text-center text-white space-y-6">
-                <Swords size={64} className="mx-auto text-pink-500" />
-                <h1 className="text-4xl font-black">HALLO, {targetName.toUpperCase()}!</h1>
-                <p className="text-indigo-200 italic">{creatorName} hat dich herausgefordert!</p>
+            <div className="text-center text-white space-y-6 animate-in fade-in zoom-in duration-500">
+                <Swords size={64} className="mx-auto text-pink-500 animate-bounce" />
+                <h1 className="text-4xl font-black italic">HALLO, {targetName.toUpperCase()}!</h1>
+                <p className="text-indigo-200">{creatorName} hat dich herausgefordert!</p>
                 <button
                     onClick={() => setStep(0)}
-                    className="bg-white text-black px-12 py-4 rounded-2xl font-bold"
+                    className="bg-white text-black px-12 py-4 rounded-2xl font-bold shadow-[0_5px_0_rgb(200,200,200)] active:translate-y-1 active:shadow-none transition-all"
                 >
                     STARTEN
                 </button>
@@ -68,67 +59,71 @@ export default function QuizEngine({ questions, targetName, creatorName }: IQuiz
 
     if (step === 1) {
         return (
-            <div className="text-center text-white space-y-4">
-                <Trophy size={80} className="mx-auto text-yellow-400" />
-                <h2 className="text-3xl font-bold">ERGEBNIS</h2>
-                <p className="text-5xl font-black">{score} / {questions.length}</p>
-                <button onClick={() => router.push('/')} className="underline pt-8">
-                    Eigene Challenge erstellen
-                </button>
+            <div className="text-center text-white space-y-8 animate-in slide-in-from-bottom-10 duration-500">
+                <Trophy size={100} className="mx-auto text-yellow-400" />
+                <div className="space-y-2">
+                    <h2 className="text-4xl font-black text-pink-500">ERGEBNIS</h2>
+                    <p className="text-6xl font-black">{score} / {questions.length}</p>
+                </div>
+                <div className="space-y-4 pt-10">
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="w-full bg-white text-black py-4 rounded-2xl font-bold"
+                    >
+                        NOCHMAL SPIELEN
+                    </button>
+                    <button onClick={() => router.push('/')} className="block w-full text-indigo-300 underline font-medium">
+                        Eigene Challenge erstellen
+                    </button>
+                </div>
             </div>
         )
     }
 
+ 
     return (
-        <div className="w-full max-w-2xl mx-auto space-y-4">
-            <div className="flex justify-between text-white/50 text-xs">
-                <span>{currentQuestion.topic}</span>
-                <span>{currentIdx + 1} / {questions.length}</span>
+        <div className="w-full space-y-8">
+            <ProgressBar current={currentIdx} total={questions.length}/>
+
+            <div className="relative">
+                {currentQuestion.type === "quiz" && (
+                    <QuizStep key={currentIdx} data={currentQuestion} onAnswer={handleAnswer} />
+                )}
+                {currentQuestion.type === "reorder" && (
+                    <ReorderStep key={currentIdx} data={currentQuestion} onAnswer={handleAnswer} />
+                )}
             </div>
 
-            <div className="bg-white/10 p-8 rounded-3xl shadow-lg w-full">
-                {currentQuestion.type === 'quiz' ? (
-                    <QuizStep
-                        data={currentQuestion.content}
-                        selectedOption={selectedOption}
-                        isCorrect={isCorrect}
-                        onAnswer={(opt: string) => {
-                            setSelectedOption(opt)
-                            handleAnswer(opt === currentQuestion.correct_answer)
-                        }}
-                    />
-                ) : (
-                    <ReorderStep
-                        data={currentQuestion.content}
-                        userWords={userWords}
-                        shuffledWords={shuffledWords}
-                        isCorrect={isCorrect}
-                        onUpdate={(newWords, newShuffled) => {
-                            setUserWords(newWords)
-                            setShuffledWords(newShuffled)
-                            if (newWords.length === currentQuestion.content.words.length) {
-                                handleAnswer(
-                                    JSON.stringify(newWords) === JSON.stringify(currentQuestion.correct_answer)
-                                )
-                            }
-                        }}
-                    />
-                )}
-
-                {isCorrect !== null && (
-                    <div className="mt-6 space-y-2">
-                        <div className="p-4 bg-indigo-500/20 rounded-xl text-sm">
-                            💡 {currentQuestion.explanation}
+            {answered && (
+                <div className="space-y-4 animate-in slide-in-from-bottom-5 duration-300">
+                    {!isCorrect && currentQuestion.explanation && (
+                        <div className="p-5 bg-red-500/20 border border-red-500/30 rounded-2xl text-white text-sm">
+                            <span className="font-bold block mb-1 text-red-400">💡 Hinweis:</span>
+                            {currentQuestion.explanation}
                         </div>
-                        <button
-                            onClick={handleNext}
-                            className="bg-white text-black px-6 py-2 rounded-xl font-bold"
-                        >
-                            Weiter
-                        </button>
-                    </div>
-                )}
-            </div>
+                    )}
+
+                    <button
+                        onClick={handleNext}
+                        className={cn(
+                            "w-full py-4 rounded-2xl font-bold text-lg transition-all shadow-lg",
+                            isCorrect
+                                ? "bg-green-500 text-white shadow-green-900/40"
+                                : "bg-white text-black"
+                        )}
+                    >
+                        {currentIdx < questions.length - 1 ? "Weiter" : "Ergebnis sehen"}
+                    </button>
+                </div>
+            )}
         </div>
     )
+
 }
+
+
+
+
+
+
+
